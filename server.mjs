@@ -10,7 +10,7 @@ import pg from 'pg';
 const PORT = parseInt(process.env.PORT || '54321', 10);
 const DATABASE_URL =
   process.env.DATABASE_URL ||
-  'postgresql://neondb_owner:npg_wZc9mVASfG0o@ep-young-river-b3ue574y-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+  'postgresql://neondb_owner:npg_wZc9mVASfG0o@ep-young-river-b3ue574y-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?uselibpqcompat=true&sslmode=require';
 
 const pool = new pg.Pool({
   connectionString: DATABASE_URL,
