@@ -6,6 +6,8 @@
   "description": "Rushi CRM Platform — Cattle Feed and PVC business management",
   "scripts": {
     "dev": "vite",
+    "server": "node server.mjs",
+    "start": "node server.mjs",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",

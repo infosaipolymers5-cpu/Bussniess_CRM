@@ -9,7 +9,7 @@ services:
     plan: starter
     region: singapore # Optimized low-latency region for Indian agricultural market
     buildCommand: npm install
-    startCommand: node -e "console.log('Rushi CRM Backend Service initialized on Render')"
+    startCommand: node server.mjs
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
