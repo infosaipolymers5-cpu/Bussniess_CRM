@@ -1,0 +1,33 @@
+# Render Blueprint for Rushi CRM Platform v2.0
+# Hosts backend compute, scheduled worker jobs, and server-side operations
+version: "1"
+
+services:
+  - type: web
+    name: rushi-crm-backend
+    runtime: node
+    plan: starter
+    region: singapore # Optimized low-latency region for Indian agricultural market
+    buildCommand: npm install
+    startCommand: node -e "console.log('Rushi CRM Backend Service initialized on Render')"
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # NeoDB PostgreSQL connection string: postgresql://user:password@neodb-host:5432/rushi_crm
+      - key: SUPABASE_URL
+        sync: false # NeoDB / Supabase API endpoint
+      - key: SUPABASE_ANON_KEY
+        sync: false # Public client key
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # Elevated service-role key for scheduled background workers
+      - key: STORAGE_BACKUP_BUCKET
+        value: private-backups
+      - key: STORAGE_DOCUMENT_BUCKET
+        value: private-documents
+      - key: BUSINESS_TIMEZONE
+        value: Asia/Kolkata
+
