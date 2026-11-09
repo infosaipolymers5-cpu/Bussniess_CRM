@@ -8,6 +8,22 @@
 -- 4. RLS policies with strict PVC isolation from cattle feed bills/POs
 
 -- ============================================================================
+-- PREREQUISITES & MEMBERSHIP HELPERS
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.has_business_membership(p_business_id UUID, p_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT public.is_business_member(p_business_id, p_user_id);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.has_business_membership(UUID, UUID) TO authenticated, service_role;
+
+-- ============================================================================
 -- 1. DOCUMENT TEMPLATES
 -- ============================================================================
 

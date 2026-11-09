@@ -4,6 +4,10 @@
 --              Digital Visiting Cards, and Customer Tiller Spares Profiling.
 -- ============================================================================
 
+-- Ensure business_members compatibility view exists
+CREATE OR REPLACE VIEW public.business_members AS 
+  SELECT * FROM public.business_memberships;
+
 -- 1. PVC Categories Table
 CREATE TABLE IF NOT EXISTS public.pvc_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -214,16 +218,10 @@ CREATE POLICY "Business cards manageable by tenant owners"
   ON public.business_cards FOR ALL
   TO authenticated
   USING (
-    business_id IN (
-      SELECT bm.business_id FROM public.business_members bm
-      WHERE bm.user_id = auth.uid() AND bm.role IN ('owner', 'admin')
-    )
+    public.is_business_owner(business_id, auth.uid())
   )
   WITH CHECK (
-    business_id IN (
-      SELECT bm.business_id FROM public.business_members bm
-      WHERE bm.user_id = auth.uid() AND bm.role IN ('owner', 'admin')
-    )
+    public.is_business_owner(business_id, auth.uid())
   );
 
 -- Customer Tiller Details Policies (Strictly Private to Tenant)
