@@ -30,6 +30,46 @@ const BusinessContext = createContext<BusinessContextValue | null>(null);
 
 const ACTIVE_BUSINESS_KEY = 'rushi-crm-active-business';
 
+const DEFAULT_DEMO_BUSINESSES: Business[] = [
+  {
+    id: '10000000-0000-0000-0000-000000000001',
+    name: 'Rushi Cattle Feed',
+    kind: 'cattle_feed',
+    timezone: 'Asia/Kolkata',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: '10000000-0000-0000-0000-000000000002',
+    name: 'Rushi PVC Pipes & Fittings',
+    kind: 'pvc',
+    timezone: 'Asia/Kolkata',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+];
+
+const DEFAULT_DEMO_MEMBERSHIPS: BusinessMembership[] = [
+  {
+    id: '20000000-0000-0000-0000-000000000001',
+    business_id: '10000000-0000-0000-0000-000000000001',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    role: 'owner',
+    is_active: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: '20000000-0000-0000-0000-000000000002',
+    business_id: '10000000-0000-0000-0000-000000000002',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    role: 'owner',
+    is_active: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+];
+
 export function BusinessProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -63,7 +103,16 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           .eq('user_id', user.id)
           .eq('is_active', true);
 
-        const mems = (membershipData ?? []) as BusinessMembership[];
+        let mems = (membershipData ?? []) as BusinessMembership[];
+
+        if (
+          mems.length === 0 &&
+          (user.id === '00000000-0000-0000-0000-000000000001' ||
+            user.email === 'owner@rushicrm.com')
+        ) {
+          mems = DEFAULT_DEMO_MEMBERSHIPS;
+        }
+
         setMemberships(mems);
 
         if (mems.length === 0) {
@@ -82,7 +131,10 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           .select('*')
           .in('id', businessIds);
 
-        const bizs = (businessData ?? []) as Business[];
+        let bizs = (businessData ?? []) as Business[];
+        if (bizs.length === 0 && mems === DEFAULT_DEMO_MEMBERSHIPS) {
+          bizs = DEFAULT_DEMO_BUSINESSES;
+        }
         setBusinesses(bizs);
 
         // Restore or default active business
