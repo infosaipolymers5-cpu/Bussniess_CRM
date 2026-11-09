@@ -441,6 +441,17 @@ const server = http.createServer((req, res) => {
   });
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n⚠️ Port ${PORT} is already in use by another process.`);
+    console.error(`If the server was already started, you do not need to run it again — it is already active!`);
+    console.error(`To restart it, close the existing terminal running on port ${PORT} and re-run npm run server.\n`);
+  } else {
+    console.error('[Server Error]', err);
+  }
+  process.exit(1);
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n======================================================`);
   console.log(`🚀 Rushi CRM Neon DB Backend running on:`);
@@ -448,3 +459,4 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`   Database: Neon PostgreSQL (Singapore pooler)`);
   console.log(`======================================================\n`);
 });
+
