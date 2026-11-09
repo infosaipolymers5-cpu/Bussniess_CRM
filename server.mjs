@@ -52,6 +52,82 @@ function setCors(res) {
   res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Range');
 }
 
+function buildSelectAndJoins(tableName, selectParam) {
+  const joins = [];
+  const extraSelects = [];
+
+  if (
+    selectParam.includes('customer:customers') ||
+    selectParam.includes('customer:customers(')
+  ) {
+    joins.push('LEFT JOIN public.customers _cust ON t.customer_id = _cust.id');
+    extraSelects.push('row_to_json(_cust.*) as customer');
+  }
+
+  if (
+    selectParam.includes('supplier:suppliers') ||
+    selectParam.includes('supplier:suppliers(')
+  ) {
+    joins.push('LEFT JOIN public.suppliers _supp ON t.supplier_id = _supp.id');
+    extraSelects.push('row_to_json(_supp.*) as supplier');
+  }
+
+  if (
+    selectParam.includes('preferences:customer_preferences') ||
+    selectParam.includes('preferences:customer_preferences(')
+  ) {
+    joins.push(
+      'LEFT JOIN public.customer_preferences _pref ON t.id = _pref.customer_id',
+    );
+    extraSelects.push('row_to_json(_pref.*) as preferences');
+  }
+
+  if (selectParam.includes('category:expense_categories')) {
+    joins.push('LEFT JOIN public.expense_categories _cat ON t.category_id = _cat.id');
+    extraSelects.push('row_to_json(_cat.*) as category');
+  }
+
+  if (selectParam.includes('category:pvc_categories')) {
+    joins.push(
+      'LEFT JOIN public.pvc_categories _pvccat ON t.category_id = _pvccat.id',
+    );
+    extraSelects.push('row_to_json(_pvccat.*) as category');
+  }
+
+  if (selectParam.includes('brand:brand_records')) {
+    joins.push('LEFT JOIN public.brand_records _brand ON t.brand_id = _brand.id');
+    extraSelects.push('row_to_json(_brand.*) as brand');
+  }
+
+  if (selectParam.includes('stops:delivery_trip_stops')) {
+    extraSelects.push(
+      "COALESCE((SELECT json_agg(s.*) FROM public.delivery_trip_stops s WHERE s.trip_id = t.id), '[]'::json) as stops",
+    );
+  }
+
+  let baseCols = 't.*';
+  if (!selectParam.includes('*')) {
+    const rawTokens = selectParam.split(',');
+    const simpleCols = [];
+    for (const tok of rawTokens) {
+      const clean = tok
+        .trim()
+        .split(':')[0]
+        .replace(/[^a-zA-Z0-9_]/g, '');
+      if (clean && !clean.includes('(') && !clean.includes(')')) {
+        simpleCols.push(`t."${clean}"`);
+      }
+    }
+    if (simpleCols.length > 0) {
+      baseCols = simpleCols.join(', ');
+    }
+  }
+
+  const allSelects = [baseCols, ...extraSelects].join(', ');
+  const allJoins = joins.join(' ');
+  return { allSelects, allJoins };
+}
+
 export async function handleRequest(req, res) {
   setCors(res);
 
@@ -212,49 +288,52 @@ export async function handleRequest(req, res) {
           const val = parts.slice(2).join('.');
           if (op === 'eq') {
             values.push(val);
-            return `"${col}" = $${pIdx++}`;
+            return `t."${col}" = $${pIdx++}`;
           } else if (op === 'is' && val === 'null') {
-            return `"${col}" IS NULL`;
+            return `t."${col}" IS NULL`;
+          } else if (op === 'ilike') {
+            values.push(val.replace(/\*/g, '%'));
+            return `t."${col}" ILIKE $${pIdx++}`;
           }
           return 'TRUE';
         });
         whereClauses.push(`(${conditions.join(' OR ')})`);
       } else if (rawVal.startsWith('eq.')) {
-        whereClauses.push(`"${key}" = $${pIdx++}`);
+        whereClauses.push(`t."${key}" = $${pIdx++}`);
         const v = rawVal.slice(3);
         values.push(v === 'true' ? true : v === 'false' ? false : v);
       } else if (rawVal.startsWith('neq.')) {
-        whereClauses.push(`"${key}" != $${pIdx++}`);
+        whereClauses.push(`t."${key}" != $${pIdx++}`);
         const v = rawVal.slice(4);
         values.push(v === 'true' ? true : v === 'false' ? false : v);
       } else if (rawVal.startsWith('gte.')) {
-        whereClauses.push(`"${key}" >= $${pIdx++}`);
+        whereClauses.push(`t."${key}" >= $${pIdx++}`);
         values.push(rawVal.slice(4));
       } else if (rawVal.startsWith('lte.')) {
-        whereClauses.push(`"${key}" <= $${pIdx++}`);
+        whereClauses.push(`t."${key}" <= $${pIdx++}`);
         values.push(rawVal.slice(4));
       } else if (rawVal.startsWith('gt.')) {
-        whereClauses.push(`"${key}" > $${pIdx++}`);
+        whereClauses.push(`t."${key}" > $${pIdx++}`);
         values.push(rawVal.slice(3));
       } else if (rawVal.startsWith('lt.')) {
-        whereClauses.push(`"${key}" < $${pIdx++}`);
+        whereClauses.push(`t."${key}" < $${pIdx++}`);
         values.push(rawVal.slice(3));
       } else if (rawVal.startsWith('ilike.')) {
-        whereClauses.push(`"${key}" ILIKE $${pIdx++}`);
+        whereClauses.push(`t."${key}" ILIKE $${pIdx++}`);
         values.push(rawVal.slice(6).replace(/\*/g, '%'));
       } else if (rawVal.startsWith('like.')) {
-        whereClauses.push(`"${key}" LIKE $${pIdx++}`);
+        whereClauses.push(`t."${key}" LIKE $${pIdx++}`);
         values.push(rawVal.slice(5).replace(/\*/g, '%'));
       } else if (rawVal.startsWith('is.')) {
         const v = rawVal.slice(3);
-        if (v === 'null') whereClauses.push(`"${key}" IS NULL`);
-        else if (v === 'not.null') whereClauses.push(`"${key}" IS NOT NULL`);
+        if (v === 'null') whereClauses.push(`t."${key}" IS NULL`);
+        else if (v === 'not.null') whereClauses.push(`t."${key}" IS NOT NULL`);
       } else if (rawVal.startsWith('in.(') && rawVal.endsWith(')')) {
         const items = rawVal
           .slice(4, -1)
           .split(',')
           .map((s) => s.replace(/^["']|["']$/g, ''));
-        whereClauses.push(`"${key}" = ANY($${pIdx++})`);
+        whereClauses.push(`t."${key}" = ANY($${pIdx++})`);
         values.push(items);
       }
     }
@@ -266,7 +345,7 @@ export async function handleRequest(req, res) {
       const parts = orderParam.split('.');
       const col = parts[0];
       const dir = (parts[1] || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-      orderClause = `ORDER BY "${col}" ${dir}`;
+      orderClause = `ORDER BY t."${col}" ${dir}`;
     }
 
     // LIMIT & OFFSET
@@ -288,18 +367,15 @@ export async function handleRequest(req, res) {
 
       // --- GET ---
       if (req.method === 'GET') {
+        const { allSelects, allJoins } = buildSelectAndJoins(
+          rawTableName,
+          selectParam,
+        );
         const whereSql =
           whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-        const selectCols =
-          selectParam === '*'
-            ? '*'
-            : selectParam
-                .split(',')
-                .map((c) => `"${c.trim()}"`)
-                .join(', ');
 
         const sql =
-          `SELECT ${selectCols} FROM public."${rawTableName}" ${whereSql} ${orderClause} ${limitClause}`.trim();
+          `SELECT ${allSelects} FROM public."${rawTableName}" t ${allJoins} ${whereSql} ${orderClause} ${limitClause}`.trim();
 
         const result = await client.query(sql, values);
         const isSingle = req.headers['accept']?.includes(
