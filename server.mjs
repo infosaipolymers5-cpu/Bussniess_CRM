@@ -4,7 +4,7 @@
  */
 
 import http from 'http';
-import { URL } from 'url';
+import { URL, fileURLToPath } from 'url';
 import pg from 'pg';
 
 const PORT = parseInt(process.env.PORT || '54321', 10);
@@ -203,7 +203,23 @@ export async function handleRequest(req, res) {
     for (const [key, rawVal] of searchParams.entries()) {
       if (['select', 'order', 'limit', 'offset'].includes(key)) continue;
 
-      if (rawVal.startsWith('eq.')) {
+      if (key === 'or') {
+        const inner = rawVal.replace(/^\(|\)$/g, '');
+        const conditions = inner.split(',').map((cond) => {
+          const parts = cond.split('.');
+          const col = parts[0];
+          const op = parts[1];
+          const val = parts.slice(2).join('.');
+          if (op === 'eq') {
+            values.push(val);
+            return `"${col}" = $${pIdx++}`;
+          } else if (op === 'is' && val === 'null') {
+            return `"${col}" IS NULL`;
+          }
+          return 'TRUE';
+        });
+        whereClauses.push(`(${conditions.join(' OR ')})`);
+      } else if (rawVal.startsWith('eq.')) {
         whereClauses.push(`"${key}" = $${pIdx++}`);
         const v = rawVal.slice(3);
         values.push(v === 'true' ? true : v === 'false' ? false : v);
@@ -430,33 +446,43 @@ export async function handleRequest(req, res) {
   res.end(JSON.stringify({ error: 'Endpoint not found' }));
 }
 
-// Start standalone server
-const server = http.createServer((req, res) => {
-  handleRequest(req, res).catch((err) => {
-    console.error('[Unhandled Request Error]', err);
-    if (!res.headersSent) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Internal server error' }));
-    }
+// Start standalone server when executed directly
+const currentFilePath = fileURLToPath(import.meta.url).toLowerCase();
+const executedScript = process.argv[1] ? process.argv[1].toLowerCase() : '';
+
+if (executedScript === currentFilePath || executedScript.endsWith('server.mjs')) {
+  const server = http.createServer((req, res) => {
+    handleRequest(req, res).catch((err) => {
+      console.error('[Unhandled Request Error]', err);
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal server error' }));
+      }
+    });
   });
-});
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`\n⚠️ Port ${PORT} is already in use by another process.`);
-    console.error(`If the server was already started, you do not need to run it again — it is already active!`);
-    console.error(`To restart it, close the existing terminal running on port ${PORT} and re-run npm run server.\n`);
-  } else {
-    console.error('[Server Error]', err);
-  }
-  process.exit(1);
-});
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n⚠️ Port ${PORT} is already in use by another process.`);
+      console.error(
+        `If the server was already started, you do not need to run it again — it is already active!`,
+      );
+      console.error(
+        `To restart it, close the existing terminal running on port ${PORT} and re-run npm run server.\n`,
+      );
+    } else {
+      console.error('[Server Error]', err);
+    }
+    process.exit(1);
+  });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n======================================================`);
-  console.log(`🚀 Rushi CRM Neon DB Backend running on:`);
-  console.log(`   http://127.0.0.1:${PORT}`);
-  console.log(`   Database: Neon PostgreSQL (Singapore pooler)`);
-  console.log(`======================================================\n`);
-});
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n======================================================`);
+    console.log(`🚀 Rushi CRM Neon DB Backend running on:`);
+    console.log(`   http://127.0.0.1:${PORT}`);
+    console.log(`   Database: Neon PostgreSQL (Singapore pooler)`);
+    console.log(`======================================================\n`);
+  });
+}
+
 

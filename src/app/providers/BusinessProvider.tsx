@@ -72,14 +72,18 @@ const DEFAULT_DEMO_MEMBERSHIPS: BusinessMembership[] = [
 
 export function BusinessProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [memberships, setMemberships] = useState<BusinessMembership[]>([]);
-  const [activeBusiness, setActiveBusinessState] = useState<Business | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>(DEFAULT_DEMO_BUSINESSES);
+  const [memberships, setMemberships] = useState<BusinessMembership[]>(
+    DEFAULT_DEMO_MEMBERSHIPS,
+  );
+  const [activeBusiness, setActiveBusinessState] = useState<Business | null>(
+    DEFAULT_DEMO_BUSINESSES[0] ?? null,
+  );
   const [activeMembership, setActiveMembership] = useState<BusinessMembership | null>(
-    null,
+    DEFAULT_DEMO_MEMBERSHIPS[0] ?? null,
   );
   const [permissions, setPermissions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Fetch memberships and businesses when user changes
   useEffect(() => {

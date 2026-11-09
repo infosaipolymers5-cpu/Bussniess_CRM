@@ -59,6 +59,29 @@ export default defineConfig({
         navigateFallbackAllowlist: [/^\/$/],
       },
     }),
+    {
+      name: 'neon-db-api-middleware',
+      configureServer(server) {
+        server.middlewares.use(async (req, res, next) => {
+          const url = req.url || '';
+          if (url.startsWith('/rest/v1') || url.startsWith('/auth/v1')) {
+            try {
+              // @ts-expect-error - import server.mjs
+              const { handleRequest } = await import('./server.mjs');
+              await handleRequest(req, res);
+            } catch (err) {
+              console.error('[Neon DB Middleware Error]', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: 'Internal server error' }));
+              }
+            }
+          } else {
+            next();
+          }
+        });
+      },
+    },
   ],
   resolve: {
     alias: {

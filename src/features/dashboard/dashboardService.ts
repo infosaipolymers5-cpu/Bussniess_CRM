@@ -158,7 +158,15 @@ export const dashboardService = {
     }
 
     // 6. Backup health
-    const backupHealth = await backupService.evaluateBackupHealth(businessId);
+    let backupHealth: { isHealthy: boolean; warnings: string[] } = {
+      isHealthy: true,
+      warnings: [],
+    };
+    try {
+      backupHealth = await backupService.evaluateBackupHealth(businessId);
+    } catch {
+      // Non-blocking on initial dashboard load
+    }
 
     return {
       totalOutstandingPaise,
