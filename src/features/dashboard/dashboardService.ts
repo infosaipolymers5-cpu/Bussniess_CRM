@@ -47,7 +47,6 @@ export const dashboardService = {
     if (businessId) {
       custQuery = custQuery.eq('business_id', businessId);
     }
-    const { data: customers } = await custQuery;
 
     // 2. Fetch Uncollected Bills for Outstanding Balance
     let uncollectedBillsQuery = supabase
@@ -58,7 +57,49 @@ export const dashboardService = {
     if (businessId) {
       uncollectedBillsQuery = uncollectedBillsQuery.eq('business_id', businessId);
     }
-    const { data: uncollectedBills } = await uncollectedBillsQuery;
+
+    // 3. Today's Commercial Bills (Exclude cancelled bills)
+    let billsQuery = supabase
+      .from('bills')
+      .select('id, total_amount_paise, status')
+      .eq('bill_date', today)
+      .neq('status', 'cancelled');
+    if (businessId) {
+      billsQuery = billsQuery.eq('business_id', businessId);
+    }
+
+    // 4. Today's Collections (Customer Payments)
+    let payQuery = supabase
+      .from('customer_payments')
+      .select('id, amount_paise')
+      .eq('payment_date', today);
+    if (businessId) {
+      payQuery = payQuery.eq('business_id', businessId);
+    }
+
+    // 5. Pending Delivery Trips
+    let tripsQuery = supabase
+      .from('delivery_trips')
+      .select('id, trip_number, trip_date, area')
+      .eq('trip_date', today);
+    if (businessId) {
+      tripsQuery = tripsQuery.eq('business_id', businessId);
+    }
+
+    // Execute queries in parallel for instant response
+    const [
+      { data: customers },
+      { data: uncollectedBills },
+      { data: todaysBills },
+      { data: todaysPayments },
+      { data: deliveryTrips },
+    ] = await Promise.all([
+      custQuery,
+      uncollectedBillsQuery,
+      billsQuery,
+      payQuery,
+      tripsQuery,
+    ]);
 
     let totalOutstandingPaise = 0;
     const customerDebtMap = new Map<string, number>();
@@ -103,46 +144,15 @@ export const dashboardService = {
       }
     }
 
-    // 3. Today's Commercial Bills (Exclude cancelled bills)
-    let billsQuery = supabase
-      .from('bills')
-      .select('id, total_amount_paise, status')
-      .eq('bill_date', today)
-      .neq('status', 'cancelled');
-    if (businessId) {
-      billsQuery = billsQuery.eq('business_id', businessId);
-    }
-    const { data: todaysBills } = await billsQuery;
-
     let todaysSalesPaise = 0;
     for (const b of todaysBills || []) {
       todaysSalesPaise += b.total_amount_paise || 0;
     }
 
-    // 4. Today's Collections (Customer Payments)
-    let payQuery = supabase
-      .from('customer_payments')
-      .select('id, amount_paise')
-      .eq('payment_date', today);
-    if (businessId) {
-      payQuery = payQuery.eq('business_id', businessId);
-    }
-    const { data: todaysPayments } = await payQuery;
-
     let todaysCollectionsPaise = 0;
     for (const p of todaysPayments || []) {
       todaysCollectionsPaise += p.amount_paise || 0;
     }
-
-    // 5. Pending Delivery Trips
-    let tripsQuery = supabase
-      .from('delivery_trips')
-      .select('id, trip_number, trip_date, area')
-      .eq('trip_date', today);
-    if (businessId) {
-      tripsQuery = tripsQuery.eq('business_id', businessId);
-    }
-    const { data: deliveryTrips } = await tripsQuery;
 
     for (const dt of deliveryTrips || []) {
       if (actionQueue.length < 8) {

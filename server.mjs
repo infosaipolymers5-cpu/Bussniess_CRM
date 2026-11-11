@@ -17,6 +17,7 @@ const pool = new pg.Pool({
   ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 pool.on('error', (err) => {
@@ -359,8 +360,9 @@ export async function handleRequest(req, res) {
       limitClause += ` OFFSET ${parseInt(offset, 10)}`;
     }
 
-    const client = await pool.connect();
+    let client;
     try {
+      client = await pool.connect();
       await client.query(
         "SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', true)",
       );
@@ -507,12 +509,12 @@ export async function handleRequest(req, res) {
       res.writeHead(405, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: `Method ${req.method} not allowed` }));
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
+      if (client) await client.query('ROLLBACK').catch(() => {});
       console.error(`[Error ${req.method} ${pathname}]`, err.message);
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ message: err.message, code: err.code }));
     } finally {
-      client.release();
+      if (client) client.release();
     }
     return;
   }
