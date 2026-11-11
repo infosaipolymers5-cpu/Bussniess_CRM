@@ -32,17 +32,23 @@ describe('Real PostgreSQL RLS Integration Suite', () => {
       await client.connect();
       isDbAvailable = true;
 
-      // Ensure test role exists
+      // Ensure test roles and default privileges exist
       await client.query(`
         DO $$ BEGIN
+          IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+            CREATE ROLE anon NOLOGIN;
+          END IF;
           IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
             CREATE ROLE authenticated NOLOGIN;
           END IF;
+          IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'service_role') THEN
+            CREATE ROLE service_role NOLOGIN;
+          END IF;
         END $$;
-        GRANT USAGE ON SCHEMA public TO authenticated;
-        GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
-        GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
-        GRANT ALL ON ALL ROUTINES IN SCHEMA public TO authenticated;
+        GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
       `);
 
       // Read and apply migration
@@ -52,12 +58,25 @@ describe('Real PostgreSQL RLS Integration Suite', () => {
       );
       await client.query(migrationSql);
 
+      // Explicitly grant permissions on all created tables to authenticated
+      await client.query(`
+        GRANT USAGE ON SCHEMA public TO authenticated;
+        GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+        GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+        GRANT ALL ON ALL ROUTINES IN SCHEMA public TO authenticated;
+      `);
+
       // Read and apply seed
       const seedSql = fs.readFileSync(
         path.resolve(__dirname, '../../../supabase/seed.sql'),
         'utf-8',
       );
       await client.query(seedSql);
+
+      // Re-grant to ensure seed tables are fully accessible
+      await client.query(`
+        GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+      `);
     } catch (err) {
       isDbAvailable = false;
       const msg = err instanceof Error ? err.message : String(err);
